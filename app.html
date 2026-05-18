@@ -522,7 +522,7 @@
     }
 
     const DEBUG = window.DEBUG_MODE === true;
-    const runtimeIssues = await loadRuntimeModules();
+    let runtimeIssues = [];
     const PROFILES = {
       delta_vfd: { baud: 9600, frame: '8N1', slaveId: 1 },
       invt_gd: { baud: 9600, frame: '8N1', slaveId: 1 },
@@ -541,6 +541,7 @@
     let rampTimer = null;
     let liveStartedAt = null;
     let simulationEnabled = false;
+    let autoMappedVendorKey = '';
     let simState = {
       freq: 50.0,
       current: 12.5,
@@ -560,7 +561,10 @@
     function escapeCsv(s) { return String(s).replace(/"/g, '""'); }
 
     function getSelectedVendorKey() {
-      return document.getElementById('sel-vendor').value || document.getElementById('sel-profile').value || 'generic';
+      return document.getElementById('sel-vendor').value
+        || document.getElementById('sel-profile').value
+        || autoMappedVendorKey
+        || 'generic';
     }
 
     function getSelectedVendorLabel() {
@@ -568,6 +572,10 @@
       if (sel.value) return sel.options[sel.selectedIndex]?.textContent || sel.value;
       const profile = document.getElementById('sel-profile');
       if (profile.value) return profile.options[profile.selectedIndex]?.textContent || profile.value;
+      if (autoMappedVendorKey) {
+        const opt = Array.from(sel.options).find((o) => o.value === autoMappedVendorKey);
+        return opt?.textContent || autoMappedVendorKey;
+      }
       return 'Unknown Vendor';
     }
 
@@ -578,6 +586,10 @@
       document.getElementById('vendor-badge').className = 'badge badge-blue';
       document.getElementById('info-manufacturer').textContent = vendorLabel.split(' ')[0] || '--';
       document.getElementById('info-model').textContent = vendorLabel;
+    }
+
+    function hasVendorSelection() {
+      return Boolean(document.getElementById('sel-vendor').value || document.getElementById('sel-profile').value || autoMappedVendorKey);
     }
 
     function appendCommRow(direction, fn, data, status) {
@@ -906,6 +918,9 @@
     }
 
     async function readAndRenderParameters({ silent = false, source = 'RX' } = {}) {
+      if (!simulationEnabled && !hasVendorSelection()) {
+        await autoResolveRegisterMap();
+      }
       const vendorKey = getSelectedVendorKey();
       const regList = (window.DEBUG_PARAM_REGS || {})[vendorKey] || window.DEBUG_PARAM_REGS?.generic || [];
       if (!regList.length) {
@@ -935,6 +950,9 @@
       const status = okCount === regList.length ? 'OK' : (okCount > 0 ? 'WARN' : 'ERR');
       appendCommRow(source, `03 Read Holding x${regList.length}`, `${okCount}/${regList.length} regs`, status);
       if (!silent) log(status === 'OK' ? 'ok' : 'warn', `Snapshot complete: ${okCount}/${regList.length} registers in ${elapsed} ms.`);
+      if (!silent && okCount === 0 && !simulationEnabled) {
+        log('warn', `No register response for map "${vendorKey}". Verify Quick Profile/Vendor, baud/frame/slave, and RS-485 A/B wiring.`);
+      }
     }
 
     function startMonitor() {
@@ -983,8 +1001,48 @@
         opt.textContent = v.name;
         sel.appendChild(opt);
       });
+      const profileKey = document.getElementById('sel-profile').value;
+      if (profileKey && Array.from(sel.options).some((o) => o.value === profileKey)) {
+        sel.value = profileKey;
+      } else if (autoMappedVendorKey && Array.from(sel.options).some((o) => o.value === autoMappedVendorKey)) {
+        sel.value = autoMappedVendorKey;
+      }
       sel.disabled = false;
       updateDeviceHeader();
+    }
+
+    async function autoResolveRegisterMap() {
+      if (!isPortOpen() || simulationEnabled) return;
+      if (document.getElementById('sel-vendor').value || document.getElementById('sel-profile').value) return;
+
+      const maps = window.DEBUG_PARAM_REGS || {};
+      const keys = Object.keys(maps).filter((k) => k !== 'generic');
+      let bestKey = '';
+      let bestScore = -1;
+
+      for (const key of keys) {
+        const regList = (maps[key] || []).slice(0, 3);
+        if (!regList.length) continue;
+        const probe = await readMultipleRegs(regList, 100);
+        const ok = probe.filter((r) => r.raw !== null).length;
+        if (ok > bestScore) {
+          bestScore = ok;
+          bestKey = key;
+        }
+        if (ok === regList.length && ok > 0) break;
+      }
+
+      if (bestScore > 0 && bestKey) {
+        autoMappedVendorKey = bestKey;
+        const sel = document.getElementById('sel-vendor');
+        if (Array.from(sel.options).some((o) => o.value === bestKey)) {
+          sel.value = bestKey;
+        }
+        updateDeviceHeader();
+        log('ok', `Auto register map matched: ${getSelectedVendorLabel()} (${bestScore}/3 probe regs).`);
+      } else {
+        log('warn', 'No register map matched automatically. Please choose Quick Profile/Vendor manually.');
+      }
     }
 
     function refreshTelemetryActions() {
@@ -1286,14 +1344,20 @@
     document.getElementById('sel-profile').addEventListener('change', (e) => {
       const p = PROFILES[e.target.value];
       if (!p) return;
+      autoMappedVendorKey = '';
       document.getElementById('sel-baud').value = p.baud;
       document.getElementById('sel-frame').value = p.frame;
       document.getElementById('inp-slave').value = p.slaveId;
+      const selVendor = document.getElementById('sel-vendor');
+      if (selVendor && Array.from(selVendor.options).some((o) => o.value === e.target.value)) {
+        selVendor.value = e.target.value;
+      }
       updateDeviceHeader();
       log('info', `Profile loaded: ${e.target.options[e.target.selectedIndex].text}`);
     });
 
     document.getElementById('sel-vendor').addEventListener('change', () => {
+      autoMappedVendorKey = document.getElementById('sel-vendor').value || '';
       updateDeviceHeader();
       log('info', `Vendor selected: ${getSelectedVendorLabel()}`);
     });
@@ -1330,9 +1394,13 @@
             document.getElementById('sel-profile').value = '';
             setConnected(true, baud, frame, slaveId);
             loadVendors();
+            autoResolveRegisterMap();
             updateDeviceHeader();
             log('ok', `Device found: ${baud} baud | ${frame} | Slave ID ${slaveId}`);
             appendCommRow('RX', '03 Probe', `${baud}/${frame}/ID${slaveId}`, 'OK');
+            readAndRenderParameters({ silent: false, source: 'RX' }).catch((err) => {
+              log('warn', `Initial snapshot failed after auto-scan: ${err.message}`);
+            });
           },
           onNotFound() {
             prog.classList.remove('active');
@@ -1376,9 +1444,11 @@
         await openPort(baud, slaveId, frame);
         setConnected(true, baud, frame, slaveId);
         await loadVendors();
+        await autoResolveRegisterMap();
         updateDeviceHeader();
         log('ok', `Connected @ ${baud} | ${frame} | Slave ID ${slaveId}`);
         appendCommRow('TX', 'Open Port', `${baud}/${frame}/ID${slaveId}`, 'OK');
+        await readAndRenderParameters({ silent: false, source: 'RX' });
       } catch (err) {
         await closePort();
         setConnected(false);
@@ -1493,22 +1563,33 @@
       a.click();
     });
 
-    window.addEventListener('resize', drawTrendChart);
-    window.addEventListener('resize', syncCommPanelHeight);
-    setInterval(updateUptime, 1000);
-    drawTrendChart();
-    syncCommPanelHeight();
-    updateDeviceHeader();
-    setupSimulationVerification();
+    async function initApp() {
+      runtimeIssues = await loadRuntimeModules();
 
-    if (runtimeIssues.length) {
-      runtimeIssues.forEach((issue) => log('error', `Runtime module load failed: ${issue}`));
-      log('warn', 'If opening HTML directly, run via local web server (http://localhost) to allow module imports.');
+      window.addEventListener('resize', drawTrendChart);
+      window.addEventListener('resize', syncCommPanelHeight);
+      setInterval(updateUptime, 1000);
+      drawTrendChart();
+      syncCommPanelHeight();
+      updateDeviceHeader();
+      setupSimulationVerification();
+
+      if (runtimeIssues.length) {
+        runtimeIssues.forEach((issue) => log('error', `Runtime module load failed: ${issue}`));
+        log('warn', 'If opening HTML directly, run via local web server (http://localhost) to allow module imports.');
+      }
+
+      if (DEBUG) log('warn', 'DEBUG MODE active. Authentication disabled.');
+      log('info', 'Dashboard ready. Connect USB-RS485 or enable Simulation Verification.');
+      setConnected(false);
     }
 
-    if (DEBUG) log('warn', 'DEBUG MODE active. Authentication disabled.');
-    log('info', 'Dashboard ready. Connect USB-RS485 or enable Simulation Verification.');
-    setConnected(false);
+    initApp().catch((err) => {
+      console.error('App initialization failed:', err);
+      try {
+        log('error', `App init failed: ${err.message}`);
+      } catch {}
+    });
   </script>
 </body>
 </html>
