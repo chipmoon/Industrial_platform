@@ -104,23 +104,83 @@ export async function closePort() {
 export function isPortOpen() { return _port !== null; }
 
 // ── Read with timeout (uses module _reader) ──────────────────────────── //
-async function readBytes(expectedLen, timeoutMs = 300) {
+async function readBytes(expectedLen, timeoutMs = 700) {
   const deadline = Date.now() + timeoutMs;
   let buf = new Uint8Array(0);
   while (buf.length < expectedLen && Date.now() < deadline) {
     try {
       const { value, done } = await Promise.race([
         _reader.read(),
-        new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 100)),
+        new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 120)),
       ]);
       if (done) break;
-      if (value) { const t = new Uint8Array(buf.length + value.length); t.set(buf); t.set(value, buf.length); buf = t; }
+      if (value) {
+        const t = new Uint8Array(buf.length + value.length);
+        t.set(buf);
+        t.set(value, buf.length);
+        buf = t;
+      }
     } catch (err) {
       if (err?.message === 'timeout') continue;
       break;
     }
   }
   return buf;
+}
+
+async function drainInput(maxMs = 60) {
+  const stopAt = Date.now() + maxMs;
+  while (Date.now() < stopAt) {
+    try {
+      const { value, done } = await Promise.race([
+        _reader.read(),
+        new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 15)),
+      ]);
+      if (done || !value || value.length === 0) break;
+    } catch (err) {
+      if (err?.message === 'timeout') break;
+      break;
+    }
+  }
+}
+
+async function readModbusFrame(timeoutMs = 900) {
+  const deadline = Date.now() + timeoutMs;
+  const buf = [];
+
+  while (Date.now() < deadline) {
+    try {
+      const { value, done } = await Promise.race([
+        _reader.read(),
+        new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 120)),
+      ]);
+      if (done) break;
+      if (value && value.length) {
+        buf.push(...value);
+      } else {
+        continue;
+      }
+    } catch (err) {
+      if (err?.message === 'timeout') continue;
+      break;
+    }
+
+    while (buf.length >= 5) {
+      const func = buf[1];
+      let expected = 0;
+      if (func === 0x03 && buf.length >= 3) expected = 5 + buf[2];
+      else if (func === 0x83) expected = 5;
+      else if (func === 0x06) expected = 8;
+      if (!expected || buf.length < expected) break;
+
+      const frame = buf.slice(0, expected);
+      if (verifyCRC(frame)) return frame;
+
+      // Re-sync on noisy line.
+      buf.shift();
+    }
+  }
+  return null;
 }
 
 // ── Read with timeout (uses a given reader) ──────────────────────────── //
@@ -152,14 +212,17 @@ export async function writeRegister(register, value) {
 // ── Read register (FC03) → value or null ────────────────────────────── //
 export async function readRegister(register) {
   if (!_writer || !_reader) throw new Error('Port not open');
+  await drainInput();
   await _writer.write(buildFC03(_slaveId, register, 1));
-  const response = await readBytes(7, 300);
-  return parseFC03Response(Array.from(response));
+  const response = await readModbusFrame(900);
+  if (!response) return null;
+  if (response[1] === 0x83) return null;
+  return parseFC03Response(response);
 }
 
 // ── Read multiple registers sequentially → [{reg, value}] ───────────── //
 // regList: [{reg, name, scale, unit}]
-export async function readMultipleRegs(regList, interDelay = 60) {
+export async function readMultipleRegs(regList, interDelay = 90) {
   const results = [];
   for (const item of regList) {
     const raw = await readRegister(item.reg);
@@ -245,7 +308,7 @@ async function _probeCombo(port, baud, frame, slaveId) {
     reader = port.readable.getReader();
 
     await writer.write(buildFC03(slaveId, 0x0000, 1));
-    const resp = await readBytesRaw(reader, 5, 600);
+    const resp = await readBytesRaw(reader, 7, 700);
     const frameBytes = Array.from(resp);
     const hasValidCrc = frameBytes.length >= 5 && verifyCRC(frameBytes);
     const isForSlave = frameBytes.length >= 1 && frameBytes[0] === slaveId;
