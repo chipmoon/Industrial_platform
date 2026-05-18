@@ -1,0 +1,1514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Industrial Drive Cloud Platform</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="dashboard-body">
+  <script>
+    window.APP_CONFIG = {
+      apiBase: 'https://chiphf-inverter-platform.hf.space',
+      debugAuditToken: '5c0a80c1f38e49a437b5f9be42c0aafb',
+    };
+
+    window.DEBUG_MODE = true;
+    window.DEBUG_VENDORS = [
+      { key: 'delta_vfd', name: 'Delta VFD (M/E/EL/L)' },
+      { key: 'invt_gd', name: 'INVT GD Series' },
+      { key: 'fuling_dzb', name: 'Fuling DZB Series' },
+      { key: 'slanvert_sb', name: 'Slanvert SB Series' },
+      { key: 'hiconics_hi', name: 'Hiconics HI Series' },
+      { key: 'veikong_vfd', name: 'Veikong VFD Series' },
+      { key: 'generic', name: 'Generic (Unknown)' },
+    ];
+
+    window.DEBUG_CONFIGS = {
+      delta_vfd: { r: 0x0002, v: 0x0003, pw: [0, 1, 2, 9], d: 60, la: null, ld: 0, ck: 'eq_zero' },
+      invt_gd: { r: 0x0700, v: 0x0000, pw: [0, 8, 100, 1234], d: 70, la: null, ld: 0, ck: 'eq_zero' },
+      fuling_dzb: { r: 0x0B00, v: 0x0B01, pw: [0, 808, 100, 1], d: 80, la: null, ld: 0, ck: 'eq_zero' },
+      slanvert_sb: { r: 0x0000, v: 0x0001, pw: [0, 1, 88, 100], d: 80, la: null, ld: 0, ck: 'eq_zero' },
+      hiconics_hi: { r: 0x0008, v: 0x0007, pw: [0, 100, 1, 168], d: 80, la: null, ld: 0, ck: 'any_nonzero' },
+      veikong_vfd: { r: 0x0000, v: 0x0900, pw: [0, 1111, 1, 100], d: 80, la: null, ld: 0, ck: 'neq_ffff' },
+      generic: { r: 0x0000, v: 0x0001, pw: [0, 1, 8, 100, 808, 1111, 1234, 9999, 168, 88], d: 120, la: null, ld: 0, ck: 'neq_ffff' },
+    };
+
+    window.DEBUG_PARAM_REGS = {
+      delta_vfd: [
+        { reg: 0x2103, name: 'Output Frequency', scale: 0.01, unit: 'Hz' },
+        { reg: 0x2104, name: 'Output Voltage', scale: 1.0, unit: 'V' },
+        { reg: 0x2105, name: 'Output Current', scale: 0.1, unit: 'A' },
+        { reg: 0x2107, name: 'DC Bus Voltage', scale: 1.0, unit: 'V' },
+        { reg: 0x2106, name: 'Motor Speed', scale: 1, unit: 'RPM' },
+        { reg: 0x2116, name: 'Drive Status', scale: 1, unit: '(hex)' },
+      ],
+      invt_gd: [
+        { reg: 0xB000, name: 'Output Frequency', scale: 0.01, unit: 'Hz' },
+        { reg: 0xB002, name: 'DC Bus Voltage', scale: 0.1, unit: 'V' },
+        { reg: 0xB003, name: 'Output Voltage', scale: 1.0, unit: 'V' },
+        { reg: 0xB004, name: 'Output Current', scale: 0.01, unit: 'A' },
+        { reg: 0xB005, name: 'Motor Speed', scale: 1, unit: 'RPM' },
+        { reg: 0xB006, name: 'Output Power', scale: 0.1, unit: 'kW' },
+      ],
+      fuling_dzb: [
+        { reg: 0x3000, name: 'Output Frequency', scale: 0.01, unit: 'Hz' },
+        { reg: 0x3001, name: 'Output Voltage', scale: 1.0, unit: 'V' },
+        { reg: 0x3002, name: 'Output Current', scale: 0.01, unit: 'A' },
+        { reg: 0x3004, name: 'DC Bus Voltage', scale: 0.1, unit: 'V' },
+        { reg: 0x3005, name: 'Motor Speed', scale: 1, unit: 'RPM' },
+      ],
+      slanvert_sb: [
+        { reg: 0x1000, name: 'Output Frequency', scale: 0.01, unit: 'Hz' },
+        { reg: 0x1001, name: 'Output Voltage', scale: 1.0, unit: 'V' },
+        { reg: 0x1002, name: 'Output Current', scale: 0.1, unit: 'A' },
+        { reg: 0x1003, name: 'DC Bus Voltage', scale: 1.0, unit: 'V' },
+      ],
+      hiconics_hi: [
+        { reg: 0x1000, name: 'Output Frequency', scale: 0.01, unit: 'Hz' },
+        { reg: 0x1001, name: 'Output Voltage', scale: 1.0, unit: 'V' },
+        { reg: 0x1002, name: 'Output Current', scale: 0.1, unit: 'A' },
+        { reg: 0x1003, name: 'DC Bus Voltage', scale: 1.0, unit: 'V' },
+      ],
+      veikong_vfd: [
+        { reg: 0x3001, name: 'Output Frequency', scale: 0.01, unit: 'Hz' },
+        { reg: 0x3002, name: 'Output Voltage', scale: 1.0, unit: 'V' },
+        { reg: 0x3003, name: 'Output Current', scale: 0.01, unit: 'A' },
+        { reg: 0x3005, name: 'DC Bus Voltage', scale: 0.1, unit: 'V' },
+      ],
+      generic: [
+        { reg: 0x3001, name: 'Reg 0x3001', scale: 1, unit: '' },
+        { reg: 0x3002, name: 'Reg 0x3002', scale: 1, unit: '' },
+        { reg: 0x3003, name: 'Reg 0x3003', scale: 1, unit: '' },
+        { reg: 0x2103, name: 'Reg 0x2103', scale: 1, unit: '' },
+        { reg: 0xB000, name: 'Reg 0xB000', scale: 1, unit: '' },
+      ],
+    };
+  </script>
+
+  <div class="dashboard-shell">
+    <aside class="side-panel">
+      <section class="card conn-panel" id="panel-devices">
+        <div class="section-label">RS-485 Connection</div>
+
+        <div>
+          <label class="field-label" for="sel-profile">Quick Profile</label>
+          <select id="sel-profile" class="select">
+            <option value="">Custom</option>
+            <option value="delta_vfd">Delta VFD (M/E/EL/L)</option>
+            <option value="invt_gd">INVT GD Series</option>
+            <option value="fuling_dzb">Fuling DZB Series</option>
+            <option value="slanvert_sb">Slanvert SB Series</option>
+            <option value="hiconics_hi">Hiconics HI Series</option>
+            <option value="veikong_vfd">Veikong VFD Series</option>
+          </select>
+        </div>
+
+        <div class="conn-grid">
+          <div>
+            <label class="field-label" for="sel-baud">Baud Rate</label>
+            <select id="sel-baud" class="select">
+              <option value="9600" selected>9600</option>
+              <option value="19200">19200</option>
+              <option value="38400">38400</option>
+              <option value="4800">4800</option>
+              <option value="115200">115200</option>
+            </select>
+          </div>
+          <div>
+            <label class="field-label" for="sel-frame">Frame</label>
+            <select id="sel-frame" class="select">
+              <option value="8N1" selected>8N1</option>
+              <option value="8E1">8E1</option>
+              <option value="8O1">8O1</option>
+              <option value="8N2">8N2</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="conn-grid">
+          <div>
+            <label class="field-label" for="inp-slave">Slave ID</label>
+            <input id="inp-slave" type="number" class="input" value="1" min="1" max="247">
+          </div>
+          <div>
+            <label class="field-label" for="sel-protocol">Protocol</label>
+            <select id="sel-protocol" class="select">
+              <option value="modbus_rtu" selected>Modbus RTU</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="scan-progress" id="scan-progress">
+          <div class="scan-label" id="scan-label">Scanning...</div>
+          <div class="scan-bar-track">
+            <div class="scan-bar-fill" id="scan-bar"></div>
+          </div>
+          <div class="scan-label dim" id="scan-detail"></div>
+        </div>
+
+        <div class="conn-actions">
+          <button id="btn-scan" class="btn btn-ghost" type="button">Auto Scan</button>
+          <button id="btn-connect" class="btn btn-primary" type="button">Connect Serial Port</button>
+          <button id="btn-fingerprint" class="btn btn-ghost" type="button" disabled>Auto Detect Vendor</button>
+        </div>
+
+        <div class="conn-status">
+          <span class="status-dot disconnected" id="dot-status"></span>
+          <span id="lbl-conn-status">Disconnected</span>
+        </div>
+
+        <hr class="divider">
+        <div class="section-label">Simulation Verification</div>
+        <label class="sim-toggle">
+          <input type="checkbox" id="sim-enabled">
+          <span>Use manual simulation data (no RS-485)</span>
+        </label>
+        <div class="sim-grid">
+          <div>
+            <label class="field-label" for="sim-freq">Frequency (Hz)</label>
+            <input id="sim-freq" type="number" class="input" value="50" step="0.01">
+          </div>
+          <div>
+            <label class="field-label" for="sim-current">Current (A)</label>
+            <input id="sim-current" type="number" class="input" value="12.50" step="0.01">
+          </div>
+          <div>
+            <label class="field-label" for="sim-voltage">Voltage (V)</label>
+            <input id="sim-voltage" type="number" class="input" value="380.0" step="0.1">
+          </div>
+          <div>
+            <label class="field-label" for="sim-bus">DC Bus (V)</label>
+            <input id="sim-bus" type="number" class="input" value="540.0" step="0.1">
+          </div>
+          <div>
+            <label class="field-label" for="sim-speed">Speed (RPM)</label>
+            <input id="sim-speed" type="number" class="input" value="1450" step="1">
+          </div>
+          <div>
+            <label class="field-label" for="sim-load">Load (%)</label>
+            <input id="sim-load" type="number" class="input" value="62" step="0.1" min="0" max="100">
+          </div>
+          <div>
+            <label class="field-label" for="sim-status">Status Reg (hex)</label>
+            <input id="sim-status" type="text" class="input" value="0x0000">
+          </div>
+        </div>
+        <div class="sim-actions">
+          <button id="btn-sim-apply" class="btn btn-ghost" type="button">Apply Sample</button>
+          <button id="btn-sim-random" class="btn btn-ghost" type="button">Randomize Sample</button>
+          <button id="btn-sim-live-toggle" class="btn btn-ghost" type="button">Start Sim Monitor</button>
+          <button id="btn-sim-ramp" class="btn btn-ghost" type="button">Ramp Test 20% -> 100%</button>
+        </div>
+      </section>
+
+      <section class="card side-status-card">
+        <div class="section-label">Connection Health</div>
+        <div class="side-status-main" id="side-connection-health">OFFLINE</div>
+        <div class="side-status-sub" id="side-uptime">Uptime 00:00:00</div>
+        <div class="side-status-sub" id="side-last-update">Last sample --:--:--</div>
+      </section>
+    </aside>
+
+    <div class="workspace-panel">
+      <header class="top-header card" id="dashboard-top">
+        <div class="top-left">
+          <div class="top-brand">
+            <div class="top-brand-title">INDUSTRIAL CLOUD DASHBOARD</div>
+            <div class="top-brand-sub">Real-time RS-485 Inverter Monitoring</div>
+          </div>
+          <div class="chip chip-offline" id="live-chip">Offline</div>
+          <div class="chip">Site: <strong>Taiwan Factory</strong></div>
+          <div class="chip">Device: <strong id="device-title">No Device</strong></div>
+        </div>
+        <div class="top-right">
+          <div id="vendor-badge" class="badge badge-blue">No vendor selected</div>
+          <div id="user-email" class="user-info" style="color:#f59e0b;font-weight:600;">DEBUG MODE</div>
+        </div>
+      </header>
+
+      <main class="dashboard-main">
+        <section class="kpi-grid">
+          <article class="card kpi-card kpi-state">
+            <div class="kpi-label">Device Status</div>
+            <div class="kpi-value error" id="kpi-state">OFFLINE</div>
+            <div class="kpi-sub" id="kpi-state-note">Waiting for RS-485 connection</div>
+          </article>
+
+          <article class="card kpi-card">
+            <div class="kpi-label">Frequency</div>
+            <div class="kpi-value" id="kpi-freq">-- Hz</div>
+            <div class="kpi-sub">Live register telemetry</div>
+          </article>
+
+          <article class="card kpi-card">
+            <div class="kpi-label">Current</div>
+            <div class="kpi-value" id="kpi-current">-- A</div>
+            <div class="kpi-sub">Live register telemetry</div>
+          </article>
+
+          <article class="card kpi-card">
+            <div class="kpi-label">Voltage</div>
+            <div class="kpi-value" id="kpi-voltage">-- V</div>
+            <div class="kpi-sub">Live register telemetry</div>
+          </article>
+
+          <article class="card kpi-card">
+            <div class="kpi-label">Load</div>
+            <div class="kpi-value" id="kpi-load">-- %</div>
+            <div class="kpi-sub">Estimated motor load</div>
+          </article>
+
+          <article class="card kpi-card">
+            <div class="kpi-label">DC Bus Voltage</div>
+            <div class="kpi-value" id="kpi-bus">-- V</div>
+            <div class="kpi-sub">Internal bus condition</div>
+          </article>
+
+          <article class="card kpi-card">
+            <div class="kpi-label">Motor Speed</div>
+            <div class="kpi-value" id="kpi-speed">-- RPM</div>
+            <div class="kpi-sub">Shaft speed feedback</div>
+          </article>
+        </section>
+
+        <section class="monitor-grid">
+          <article class="card panel live-panel" id="panel-monitoring">
+            <div class="panel-head">
+              <div class="panel-title">Live Monitoring</div>
+              <div class="multi-axis-note">Independent Y-axis per parameter</div>
+            </div>
+            <div class="chart-stack">
+              <div class="chart-mini-row">
+                <div class="chart-mini-head">
+                  <span class="legend-item"><span class="legend-dot freq"></span>Frequency (Hz)</span>
+                  <span class="chart-mini-scale">Y: Hz</span>
+                </div>
+                <div class="chart-wrap mini">
+                  <canvas id="live-trend-freq" aria-label="Live frequency trend"></canvas>
+                </div>
+              </div>
+              <div class="chart-mini-row">
+                <div class="chart-mini-head">
+                  <span class="legend-item"><span class="legend-dot current"></span>Current (A)</span>
+                  <span class="chart-mini-scale">Y: Ampere</span>
+                </div>
+                <div class="chart-wrap mini">
+                  <canvas id="live-trend-current" aria-label="Live current trend"></canvas>
+                </div>
+              </div>
+              <div class="chart-mini-row">
+                <div class="chart-mini-head">
+                  <span class="legend-item"><span class="legend-dot voltage"></span>Voltage (V)</span>
+                  <span class="chart-mini-scale">Y: Volt</span>
+                </div>
+                <div class="chart-wrap mini">
+                  <canvas id="live-trend-voltage" aria-label="Live voltage trend"></canvas>
+                </div>
+              </div>
+              <div class="chart-mini-row">
+                <div class="chart-mini-head">
+                  <span class="legend-item"><span class="legend-dot load"></span>Load (%)</span>
+                  <span class="chart-mini-scale">Y: Percent</span>
+                </div>
+                <div class="chart-wrap mini">
+                  <canvas id="live-trend-load" aria-label="Live load trend"></canvas>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="card panel info-panel">
+            <div class="panel-head">
+              <div class="panel-title">Device Information</div>
+            </div>
+            <div class="info-grid">
+              <div class="info-key">Manufacturer</div><div class="info-val" id="info-manufacturer">--</div>
+              <div class="info-key">Model</div><div class="info-val" id="info-model">--</div>
+              <div class="info-key">Protocol</div><div class="info-val">RS-485 / Modbus RTU</div>
+              <div class="info-key">Slave ID</div><div class="info-val" id="info-slave">--</div>
+              <div class="info-key">Baud Rate</div><div class="info-val" id="info-baud">--</div>
+              <div class="info-key">Frame</div><div class="info-val" id="info-frame">--</div>
+              <div class="info-key">Last Sample</div><div class="info-val" id="info-last-sample">--</div>
+            </div>
+          </article>
+
+          <article class="card panel fault-panel" id="panel-faults">
+            <div class="panel-head">
+              <div class="panel-title">Fault Status</div>
+            </div>
+            <div class="fault-state ok" id="fault-state">No Active Fault</div>
+            <div class="fault-desc" id="fault-desc">Drive is operating normally.</div>
+            <div class="mini-table-wrap">
+              <table class="mini-table">
+                <thead>
+                  <tr>
+                    <th>Code</th>
+                    <th>Description</th>
+                    <th>Time</th>
+                  </tr>
+                </thead>
+                <tbody id="fault-history-body">
+                  <tr>
+                    <td>--</td>
+                    <td>No fault record in this session</td>
+                    <td>--</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section class="data-grid">
+          <article class="card panel param-panel" id="panel-parameters">
+            <div class="panel-head">
+              <div class="panel-title">Parameter Snapshot</div>
+              <div class="inline-actions">
+                <select id="sel-monitor-rate" class="select compact" aria-label="Monitor rate">
+                  <option value="1000">1s</option>
+                  <option value="2000" selected>2s</option>
+                  <option value="5000">5s</option>
+                </select>
+                <button id="btn-monitor-start" class="btn btn-success" type="button" disabled>Start Live Monitor</button>
+                <button id="btn-monitor-stop" class="btn btn-danger" type="button" disabled>Stop</button>
+                <button id="btn-read-params" class="btn btn-ghost" type="button" disabled>Read Snapshot</button>
+              </div>
+            </div>
+            <div class="mini-table-wrap">
+              <table class="mini-table" id="params-table">
+                <thead>
+                  <tr>
+                    <th>Register</th>
+                    <th>Parameter</th>
+                    <th>Value</th>
+                    <th>Unit</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="params-table-body">
+                  <tr>
+                    <td colspan="5" class="table-empty">No data yet. Connect and read snapshot.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="card panel comm-panel" id="panel-diagnostics">
+            <div class="panel-head">
+              <div class="panel-title">Recent Communications</div>
+            </div>
+            <div class="mini-table-wrap">
+              <table class="mini-table">
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Direction</th>
+                    <th>Function</th>
+                    <th>Data</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="comm-table-body">
+                  <tr>
+                    <td colspan="5" class="table-empty">No communication records yet.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section class="unlock-grid">
+          <article class="card panel unlock-panel">
+            <div class="panel-head">
+              <div class="panel-title">Unlock Engine</div>
+            </div>
+
+            <div class="vendor-row">
+              <label class="field-label" for="sel-vendor" style="margin:0;min-width:58px;">Vendor</label>
+              <select id="sel-vendor" class="select" disabled>
+                <option value="">Select after connecting</option>
+              </select>
+            </div>
+
+            <div class="unlock-current">
+              <span class="stat-item">Trying:</span>
+              <div class="mono-display" id="lbl-current-code">--</div>
+            </div>
+
+            <div>
+              <div class="progress-track">
+                <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+              </div>
+              <div class="stats-row" style="margin-top:8px;">
+                <div class="stat-item">Progress <span class="stat-val" id="lbl-progress">0%</span></div>
+                <div class="stat-item">Speed <span class="stat-val" id="lbl-speed">--</span></div>
+                <div class="stat-item">ETA <span class="stat-val" id="lbl-eta">--</span></div>
+              </div>
+            </div>
+
+            <div class="found-box" id="found-box">
+              <div class="found-label">Password Found</div>
+              <div class="mono-display found" id="lbl-found-pw">00000</div>
+            </div>
+
+            <div class="ctrl-btns">
+              <button id="btn-start" class="btn btn-success" type="button" disabled>Start</button>
+              <button id="btn-pause" class="btn btn-ghost" type="button" disabled>Pause</button>
+              <button id="btn-stop" class="btn btn-danger" type="button" disabled>Stop</button>
+            </div>
+
+            <div class="toggle-row">
+              <input type="checkbox" id="chk-verbose">
+              <label for="chk-verbose">Verbose log (show raw register values)</label>
+            </div>
+          </article>
+
+          <article class="card panel log-panel" id="panel-reports">
+            <div class="panel-head">
+              <div class="panel-title">Activity Log</div>
+              <div class="inline-actions">
+                <button class="btn btn-ghost" id="btn-export-log" type="button">Export</button>
+                <button class="btn btn-ghost" id="btn-clear-log" type="button">Clear</button>
+              </div>
+            </div>
+            <div class="log-body" id="log-body"></div>
+          </article>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script type="module">
+    let openPort = async () => { throw new Error('Serial module is not loaded.'); };
+    let closePort = async () => {};
+    let isPortOpen = () => false;
+    let autoScan = async () => { throw new Error('Serial module is not loaded.'); };
+    let readMultipleRegs = async () => [];
+    let SCAN_TOTAL = 0;
+    let BruteForceEngine = class {
+      constructor() {}
+      async run() { throw new Error('Brute-force module is not loaded.'); }
+      pause() {}
+      resume() {}
+      stop() {}
+    };
+
+    async function loadRuntimeModules() {
+      const issues = [];
+      try {
+        const serialMod = await import('./js/serial.js');
+        openPort = serialMod.openPort;
+        closePort = serialMod.closePort;
+        isPortOpen = serialMod.isPortOpen;
+        autoScan = serialMod.autoScan;
+        readMultipleRegs = serialMod.readMultipleRegs;
+        SCAN_TOTAL = serialMod.SCAN_TOTAL;
+      } catch (err) {
+        issues.push(`serial.js: ${err.message}`);
+      }
+
+      try {
+        const bruteMod = await import('./js/brute_force.js');
+        BruteForceEngine = bruteMod.BruteForceEngine;
+      } catch (err) {
+        issues.push(`brute_force.js: ${err.message}`);
+      }
+
+      return issues;
+    }
+
+    const DEBUG = window.DEBUG_MODE === true;
+    const runtimeIssues = await loadRuntimeModules();
+    const PROFILES = {
+      delta_vfd: { baud: 9600, frame: '8N1', slaveId: 1 },
+      invt_gd: { baud: 9600, frame: '8N1', slaveId: 1 },
+      fuling_dzb: { baud: 19200, frame: '8N1', slaveId: 1 },
+      slanvert_sb: { baud: 9600, frame: '8N1', slaveId: 1 },
+      hiconics_hi: { baud: 9600, frame: '8N1', slaveId: 1 },
+      veikong_vfd: { baud: 9600, frame: '8N1', slaveId: 1 },
+    };
+
+    let engine = null;
+    let vendorConfig = null;
+    let logEntries = [];
+    let serialBusy = false;
+    let monitorTimer = null;
+    let monitorBusy = false;
+    let rampTimer = null;
+    let liveStartedAt = null;
+    let simulationEnabled = false;
+    let simState = {
+      freq: 50.0,
+      current: 12.5,
+      voltage: 380.0,
+      load: 62.0,
+      bus: 540.0,
+      speed: 1450,
+      statusRaw: 0x0000,
+    };
+
+    const trendState = { maxPoints: 40, labels: [], frequency: [], current: [], voltage: [], load: [] };
+    const SESSION_ID = Math.random().toString(36).slice(2, 10).toUpperCase();
+
+    function nowText() { return new Date().toLocaleTimeString('en-US', { hour12: false }); }
+    function parseNumeric(value) { const n = Number(value); return Number.isFinite(n) ? n : null; }
+    function formatValue(v, unit = '', digits = 2) { return Number.isFinite(v) ? `${v.toFixed(digits)} ${unit}`.trim() : `-- ${unit}`.trim(); }
+    function escapeCsv(s) { return String(s).replace(/"/g, '""'); }
+
+    function getSelectedVendorKey() {
+      return document.getElementById('sel-vendor').value || document.getElementById('sel-profile').value || 'generic';
+    }
+
+    function getSelectedVendorLabel() {
+      const sel = document.getElementById('sel-vendor');
+      if (sel.value) return sel.options[sel.selectedIndex]?.textContent || sel.value;
+      const profile = document.getElementById('sel-profile');
+      if (profile.value) return profile.options[profile.selectedIndex]?.textContent || profile.value;
+      return 'Unknown Vendor';
+    }
+
+    function updateDeviceHeader() {
+      const vendorLabel = getSelectedVendorLabel();
+      document.getElementById('device-title').textContent = vendorLabel;
+      document.getElementById('vendor-badge').textContent = vendorLabel;
+      document.getElementById('vendor-badge').className = 'badge badge-blue';
+      document.getElementById('info-manufacturer').textContent = vendorLabel.split(' ')[0] || '--';
+      document.getElementById('info-model').textContent = vendorLabel;
+    }
+
+    function appendCommRow(direction, fn, data, status) {
+      const tbody = document.getElementById('comm-table-body');
+      if (tbody.querySelector('.table-empty')) tbody.innerHTML = '';
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td>${nowText()}</td>
+        <td>${direction}</td>
+        <td>${fn}</td>
+        <td>${data}</td>
+        <td><span class="comm-status ${status === 'OK' ? 'ok' : status === 'WARN' ? 'warn' : 'error'}">${status}</span></td>
+      `;
+      tbody.prepend(row);
+      while (tbody.children.length > 40) tbody.removeChild(tbody.lastChild);
+      syncCommPanelHeight();
+    }
+
+    function syncCommPanelHeight() {
+      const paramWrap = document.querySelector('.param-panel .mini-table-wrap');
+      const commWrap = document.querySelector('.comm-panel .mini-table-wrap');
+      if (!paramWrap || !commWrap) return;
+      const h = Math.max(180, Math.round(paramWrap.getBoundingClientRect().height));
+      commWrap.style.maxHeight = `${h}px`;
+    }
+
+    function parseHexStatus(input) {
+      if (typeof input !== 'string') return 0;
+      const normalized = input.trim().toLowerCase();
+      if (!normalized) return 0;
+      const stripped = normalized.startsWith('0x') ? normalized.slice(2) : normalized;
+      const parsed = Number.parseInt(stripped, 16);
+      if (!Number.isFinite(parsed)) return 0;
+      return Math.max(0, Math.min(0xFFFF, parsed));
+    }
+
+    function readSimulationInputs() {
+      const freq = parseNumeric(document.getElementById('sim-freq').value);
+      const current = parseNumeric(document.getElementById('sim-current').value);
+      const voltage = parseNumeric(document.getElementById('sim-voltage').value);
+      const load = parseNumeric(document.getElementById('sim-load').value);
+      const bus = parseNumeric(document.getElementById('sim-bus').value);
+      const speed = parseNumeric(document.getElementById('sim-speed').value);
+      const statusRaw = parseHexStatus(document.getElementById('sim-status').value);
+      return {
+        freq: Number.isFinite(freq) ? freq : 0,
+        current: Number.isFinite(current) ? current : 0,
+        voltage: Number.isFinite(voltage) ? voltage : 0,
+        load: Number.isFinite(load) ? Math.max(0, Math.min(100, load)) : 0,
+        bus: Number.isFinite(bus) ? bus : 0,
+        speed: Number.isFinite(speed) ? speed : 0,
+        statusRaw,
+      };
+    }
+
+    function jitterValue(base, scale, min = 0) {
+      const jitter = (Math.random() - 0.5) * scale * 2;
+      return Math.max(min, base + jitter);
+    }
+
+    function generateSimulationMetrics(autoJitter = false) {
+      if (!autoJitter) return { ...simState };
+      const load = jitterValue(simState.load, 2.5, 0);
+      const loadClamped = Math.min(100, load);
+      const currentFromLoad = Math.max(0, (loadClamped / 100) * 20.0);
+      const voltageFromLoad = Math.max(300, 340 + (loadClamped / 100) * 80.0);
+      return {
+        freq: jitterValue(simState.freq, 0.15, 0),
+        current: jitterValue(currentFromLoad, 0.35, 0),
+        voltage: jitterValue(voltageFromLoad, 1.8, 0),
+        load: loadClamped,
+        bus: jitterValue(simState.bus, 2.0, 0),
+        speed: jitterValue(simState.speed, 8, 0),
+        statusRaw: simState.statusRaw,
+      };
+    }
+
+    function buildSimulationResults(regList, metrics) {
+      return regList.map((item) => {
+        const key = item.name.toLowerCase();
+        let displayValue = 0;
+
+        if (key.includes('frequency')) displayValue = metrics.freq;
+        else if (key.includes('current')) displayValue = metrics.current;
+        else if (key.includes('bus voltage') || key.includes('dc bus')) displayValue = metrics.bus;
+        else if (key.includes('voltage')) displayValue = metrics.voltage;
+        else if (key.includes('load')) displayValue = metrics.load;
+        else if (key.includes('speed')) displayValue = metrics.speed;
+        else if (key.includes('status')) displayValue = metrics.statusRaw;
+
+        const raw = item.unit === '(hex)'
+          ? metrics.statusRaw
+          : Math.round(displayValue / Math.max(item.scale || 1, 0.0001));
+
+        return {
+          ...item,
+          raw,
+          value: item.unit === '(hex)' ? String(raw) : (raw * item.scale).toFixed(2),
+        };
+      });
+    }
+
+    function isDataSourceReady() {
+      return simulationEnabled || isPortOpen();
+    }
+
+    function applySimulationToDashboard({ autoJitter = false, source = 'SIM', writeInputs = false } = {}) {
+      const vendorKey = getSelectedVendorKey();
+      const regList = (window.DEBUG_PARAM_REGS || {})[vendorKey] || window.DEBUG_PARAM_REGS?.generic || [];
+      const metrics = generateSimulationMetrics(autoJitter);
+
+      if (autoJitter) {
+        simState = { ...simState, ...metrics };
+      }
+      if (writeInputs) {
+        setSimulationInputs(simState);
+      }
+
+      const results = buildSimulationResults(regList, metrics);
+      renderParameterTable(results);
+      updateKpiValues(metrics);
+      pushTrend(metrics);
+      drawTrendChart();
+      updateSampleTime();
+      appendCommRow('SIM', `03 Simulated x${regList.length}`, `${regList.length}/${regList.length} regs`, 'OK');
+      return metrics;
+    }
+
+    function renderParameterTable(results) {
+      const tbody = document.getElementById('params-table-body');
+      if (!results.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="table-empty">No register map for selected vendor.</td></tr>';
+        syncCommPanelHeight();
+        return;
+      }
+      tbody.innerHTML = '';
+      for (const item of results) {
+        const regHex = `0x${item.reg.toString(16).toUpperCase().padStart(4, '0')}`;
+        const valueText = item.raw === null ? '--' : item.unit === '(hex)' ? `0x${item.raw.toString(16).toUpperCase().padStart(4, '0')}` : item.value;
+        const stateText = item.raw === null ? 'Timeout' : 'OK';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${regHex}</td>
+          <td>${item.name}</td>
+          <td>${valueText}</td>
+          <td>${item.unit === '(hex)' ? '' : item.unit}</td>
+          <td><span class="comm-status ${item.raw === null ? 'warn' : 'ok'}">${stateText}</span></td>
+        `;
+        tbody.appendChild(tr);
+      }
+      syncCommPanelHeight();
+    }
+
+    function extractMetrics(results) {
+      const metrics = { freq: null, current: null, voltage: null, load: null, bus: null, speed: null, statusRaw: null };
+      for (const r of results) {
+        const key = r.name.toLowerCase();
+        const value = parseNumeric(r.value);
+        if (key.includes('frequency') && metrics.freq === null) metrics.freq = value;
+        if (key.includes('current') && metrics.current === null) metrics.current = value;
+        if (key.includes('output voltage') && metrics.voltage === null) metrics.voltage = value;
+        if (key.includes('load') && metrics.load === null) metrics.load = value;
+        if (key.includes('bus voltage') && metrics.bus === null) metrics.bus = value;
+        if (key.includes('speed') && metrics.speed === null) metrics.speed = value;
+        if (key.includes('status') && Number.isInteger(r.raw)) metrics.statusRaw = r.raw;
+      }
+      if (!Number.isFinite(metrics.load) && Number.isFinite(metrics.current)) {
+        metrics.load = Math.max(0, Math.min(100, (metrics.current / 20.0) * 100));
+      }
+      return metrics;
+    }
+
+    function setStatusState(text, note, modeClass) {
+      const state = document.getElementById('kpi-state');
+      state.textContent = text;
+      state.className = `kpi-value ${modeClass || ''}`.trim();
+      document.getElementById('kpi-state-note').textContent = note;
+
+      const faultState = document.getElementById('fault-state');
+      const faultDesc = document.getElementById('fault-desc');
+      if (modeClass === 'warn') {
+        faultState.textContent = 'Warning';
+        faultState.className = 'fault-state warn';
+        faultDesc.textContent = note;
+      } else if (modeClass === 'error') {
+        faultState.textContent = 'Communication Fault';
+        faultState.className = 'fault-state error';
+        faultDesc.textContent = note;
+      } else {
+        faultState.textContent = 'No Active Fault';
+        faultState.className = 'fault-state ok';
+        faultDesc.textContent = 'Drive is operating normally.';
+      }
+    }
+
+    function updateKpiValues(metrics) {
+      document.getElementById('kpi-freq').textContent = formatValue(metrics.freq, 'Hz', 2);
+      document.getElementById('kpi-current').textContent = formatValue(metrics.current, 'A', 2);
+      document.getElementById('kpi-voltage').textContent = formatValue(metrics.voltage, 'V', 1);
+      document.getElementById('kpi-load').textContent = formatValue(metrics.load, '%', 1);
+      document.getElementById('kpi-bus').textContent = formatValue(metrics.bus, 'V', 1);
+      document.getElementById('kpi-speed').textContent = formatValue(metrics.speed, 'RPM', 0);
+      if (metrics.statusRaw === null || metrics.statusRaw === 0) {
+        setStatusState('RUNNING', 'Live telemetry healthy', 'ok');
+      } else {
+        const code = `0x${metrics.statusRaw.toString(16).toUpperCase().padStart(4, '0')}`;
+        setStatusState('CHECK', `Drive status register: ${code}`, 'warn');
+      }
+    }
+
+    function updateSampleTime() {
+      const time = nowText();
+      document.getElementById('info-last-sample').textContent = time;
+      document.getElementById('side-last-update').textContent = `Last sample ${time}`;
+    }
+
+    function pushTrend(metrics) {
+      if (!Number.isFinite(metrics.freq) || !Number.isFinite(metrics.current) || !Number.isFinite(metrics.voltage)) return;
+      const load = Number.isFinite(metrics.load) ? Math.max(0, Math.min(100, metrics.load)) : 0;
+      trendState.labels.push(nowText());
+      trendState.frequency.push(metrics.freq);
+      trendState.current.push(metrics.current);
+      trendState.voltage.push(metrics.voltage);
+      trendState.load.push(load);
+      while (trendState.labels.length > trendState.maxPoints) {
+        trendState.labels.shift();
+        trendState.frequency.shift();
+        trendState.current.shift();
+        trendState.voltage.shift();
+        trendState.load.shift();
+      }
+    }
+
+    function drawSeriesChart(canvasId, values, color, label, unit) {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      canvas.width = Math.max(1, Math.floor(width * dpr));
+      canvas.height = Math.max(1, Math.floor(height * dpr));
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, width, height);
+
+      const pad = { top: 16, right: 16, bottom: 22, left: 34 };
+      const chartW = width - pad.left - pad.right;
+      const chartH = height - pad.top - pad.bottom;
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.18)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 4; i++) {
+        const y = pad.top + (chartH / 4) * i;
+        ctx.beginPath();
+        ctx.moveTo(pad.left, y);
+        ctx.lineTo(pad.left + chartW, y);
+        ctx.stroke();
+      }
+
+      if (trendState.labels.length < 1 || values.length < 1) {
+        ctx.fillStyle = 'rgba(148, 163, 184, 0.75)';
+        ctx.font = '11px Inter';
+        ctx.fillText(`Waiting ${label} samples...`, pad.left + 10, pad.top + 22);
+        return;
+      }
+
+      const safeValues = values.filter(Number.isFinite);
+      const maxValue = Math.max(...safeValues, 1);
+      const minValue = Math.min(...safeValues, 0);
+      const range = Math.max(maxValue - minValue, 0.01);
+      const toX = (i) => {
+        if (trendState.labels.length <= 1) return pad.left + chartW;
+        return pad.left + (i / (trendState.labels.length - 1)) * chartW;
+      };
+      const toY = (v) => pad.top + (1 - ((v - minValue) / range)) * chartH;
+
+      if (values.length === 1) {
+        const x = toX(0);
+        const y = toY(values[0]);
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(148, 163, 184, 0.78)';
+        ctx.font = '10px Inter';
+        ctx.fillText('1 sample', pad.left + 8, pad.top + 12);
+      } else {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        values.forEach((v, i) => {
+          const x = toX(i);
+          const y = toY(v);
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = 'rgba(148, 163, 184, 0.82)';
+      ctx.font = '10px Inter';
+      ctx.fillText(`${maxValue.toFixed(2)} ${unit}`, 4, pad.top + 2);
+      ctx.fillText(`${minValue.toFixed(2)} ${unit}`, 4, pad.top + chartH + 10);
+
+      const last = values[values.length - 1];
+      if (Number.isFinite(last)) {
+        ctx.fillStyle = color;
+        ctx.font = '10px Inter';
+        ctx.fillText(`Now: ${last.toFixed(2)} ${unit}`, width - 100, pad.top + 2);
+      }
+    }
+
+    function drawTrendChart() {
+      drawSeriesChart('live-trend-freq', trendState.frequency, '#38BDF8', 'Frequency', 'Hz');
+      drawSeriesChart('live-trend-current', trendState.current, '#22C55E', 'Current', 'A');
+      drawSeriesChart('live-trend-voltage', trendState.voltage, '#FBBF24', 'Voltage', 'V');
+      drawSeriesChart('live-trend-load', trendState.load, '#F97316', 'Load', '%');
+    }
+
+    function setMonitorRunning(running) {
+      document.getElementById('btn-monitor-start').disabled = running || !isDataSourceReady();
+      document.getElementById('btn-monitor-stop').disabled = !running;
+      const simLiveBtn = document.getElementById('btn-sim-live-toggle');
+      if (simLiveBtn) {
+        simLiveBtn.textContent = running ? 'Stop Sim Monitor' : 'Start Sim Monitor';
+      }
+    }
+
+    async function readAndRenderParameters({ silent = false, source = 'RX' } = {}) {
+      const vendorKey = getSelectedVendorKey();
+      const regList = (window.DEBUG_PARAM_REGS || {})[vendorKey] || window.DEBUG_PARAM_REGS?.generic || [];
+      if (!regList.length) {
+        renderParameterTable([]);
+        if (!silent) log('warn', 'No parameter map for this vendor.');
+        return;
+      }
+
+      if (simulationEnabled) {
+        applySimulationToDashboard({ autoJitter: source === 'SIM' || source === 'RAMP', source, writeInputs: source === 'RAMP' });
+        if (!silent) {
+          log('ok', 'Simulation snapshot complete.');
+        }
+        return;
+      }
+
+      const started = performance.now();
+      const results = await readMultipleRegs(regList);
+      const elapsed = Math.round(performance.now() - started);
+      renderParameterTable(results);
+      const metrics = extractMetrics(results);
+      updateKpiValues(metrics);
+      pushTrend(metrics);
+      drawTrendChart();
+      updateSampleTime();
+      const okCount = results.filter(r => r.raw !== null).length;
+      const status = okCount === regList.length ? 'OK' : (okCount > 0 ? 'WARN' : 'ERR');
+      appendCommRow(source, `03 Read Holding x${regList.length}`, `${okCount}/${regList.length} regs`, status);
+      if (!silent) log(status === 'OK' ? 'ok' : 'warn', `Snapshot complete: ${okCount}/${regList.length} registers in ${elapsed} ms.`);
+    }
+
+    function startMonitor() {
+      if (!isDataSourceReady()) { log('warn', 'Connect RS-485 or enable simulation first.'); return; }
+      if (monitorTimer) return;
+      const rate = parseInt(document.getElementById('sel-monitor-rate').value, 10) || 2000;
+      monitorTimer = setInterval(() => pollLive(false), rate);
+      setMonitorRunning(true);
+      log('info', `Live monitor started (${rate} ms interval, ${simulationEnabled ? 'SIM' : 'RS-485'} source).`);
+      pollLive(true);
+    }
+
+    function stopMonitor(silent = false) {
+      if (monitorTimer) { clearInterval(monitorTimer); monitorTimer = null; }
+      setMonitorRunning(false);
+      if (!silent) log('warn', 'Live monitor stopped.');
+    }
+
+    async function pollLive(isImmediate = false) {
+      if (monitorBusy) return;
+      monitorBusy = true;
+      try { await readAndRenderParameters({ silent: !isImmediate, source: simulationEnabled ? 'SIM' : 'RX' }); }
+      finally { monitorBusy = false; }
+    }
+
+    async function auditDebug(action, extras = {}) {
+      const token = window.APP_CONFIG?.debugAuditToken;
+      if (!token || token === 'REPLACE_WITH_YOUR_DEBUG_TOKEN') return;
+      const apiBase = window.APP_CONFIG?.apiBase;
+      try {
+        await fetch(`${apiBase}/audit/debug-log`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token, session_id: SESSION_ID, action, ...extras }),
+        });
+      } catch {}
+    }
+
+    async function loadVendors() {
+      if (!DEBUG) return;
+      const sel = document.getElementById('sel-vendor');
+      sel.innerHTML = '<option value="">Select vendor</option>';
+      window.DEBUG_VENDORS.forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = v.key;
+        opt.textContent = v.name;
+        sel.appendChild(opt);
+      });
+      sel.disabled = false;
+      updateDeviceHeader();
+    }
+
+    function refreshTelemetryActions() {
+      const canRead = isDataSourceReady();
+      document.getElementById('btn-read-params').disabled = !canRead;
+      if (monitorTimer) {
+        document.getElementById('btn-monitor-start').disabled = true;
+        document.getElementById('btn-monitor-stop').disabled = false;
+      } else {
+        document.getElementById('btn-monitor-start').disabled = !canRead;
+        document.getElementById('btn-monitor-stop').disabled = true;
+      }
+    }
+
+    function refreshSourceState() {
+      const chip = document.getElementById('live-chip');
+      const health = document.getElementById('side-connection-health');
+
+      if (isPortOpen()) {
+        chip.textContent = 'Online';
+        chip.className = 'chip chip-online';
+        health.textContent = 'CONNECTED';
+        health.className = 'side-status-main ok';
+        if (!liveStartedAt) liveStartedAt = Date.now();
+      } else if (simulationEnabled) {
+        chip.textContent = 'Simulation';
+        chip.className = 'chip chip-sim';
+        health.textContent = 'SIMULATED';
+        health.className = 'side-status-main warn';
+        setStatusState('SIMULATION', 'Manual verification data active', 'warn');
+        if (!liveStartedAt) liveStartedAt = Date.now();
+      } else {
+        chip.textContent = 'Offline';
+        chip.className = 'chip chip-offline';
+        health.textContent = 'OFFLINE';
+        health.className = 'side-status-main error';
+        setStatusState('OFFLINE', 'Waiting for RS-485 connection', 'error');
+        liveStartedAt = null;
+      }
+
+      refreshTelemetryActions();
+    }
+
+    function setConnected(connected, baud, frame, slaveId) {
+      const dot = document.getElementById('dot-status');
+      const lbl = document.getElementById('lbl-conn-status');
+      const btn = document.getElementById('btn-connect');
+      dot.className = `status-dot ${connected ? 'connected' : 'disconnected'}`;
+      lbl.textContent = connected ? `${baud} ${frame} ID:${slaveId}` : 'Disconnected';
+      btn.textContent = connected ? 'Disconnect' : 'Connect Serial Port';
+      btn.className = connected ? 'btn btn-danger' : 'btn btn-primary';
+
+      document.getElementById('btn-scan').disabled = connected;
+      document.getElementById('btn-fingerprint').disabled = !connected;
+      document.getElementById('btn-start').disabled = !connected;
+
+      if (connected) {
+        liveStartedAt = Date.now();
+        document.getElementById('info-slave').textContent = String(slaveId);
+        document.getElementById('info-baud').textContent = `${baud} bps`;
+        document.getElementById('info-frame').textContent = frame;
+        setStatusState('ONLINE', 'Serial link established', 'ok');
+      } else {
+        stopMonitor(true);
+        if (!simulationEnabled) {
+          liveStartedAt = null;
+        }
+      }
+
+      refreshSourceState();
+    }
+
+    function updateUptime() {
+      if (!liveStartedAt) { document.getElementById('side-uptime').textContent = 'Uptime 00:00:00'; return; }
+      const s = Math.floor((Date.now() - liveStartedAt) / 1000);
+      const hh = String(Math.floor(s / 3600)).padStart(2, '0');
+      const mm = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+      const ss = String(s % 60).padStart(2, '0');
+      document.getElementById('side-uptime').textContent = `Uptime ${hh}:${mm}:${ss}`;
+    }
+
+    function updateProgress(cur, total, speed) {
+      const pct = (cur / total * 100).toFixed(2);
+      document.getElementById('progress-fill').style.width = pct + '%';
+      document.getElementById('lbl-progress').textContent = pct + '%';
+      document.getElementById('lbl-speed').textContent = speed.toFixed(0) + '/s';
+      document.getElementById('lbl-current-code').textContent = String(cur).padStart(5, '0');
+      const remaining = (total - cur) / Math.max(speed, 0.001);
+      document.getElementById('lbl-eta').textContent = fmtTime(remaining);
+    }
+
+    function resetProgress() {
+      document.getElementById('progress-fill').style.width = '0%';
+      document.getElementById('lbl-progress').textContent = '0%';
+      document.getElementById('lbl-speed').textContent = '--';
+      document.getElementById('lbl-eta').textContent = '--';
+      document.getElementById('lbl-current-code').textContent = '--';
+      document.getElementById('lbl-current-code').style.color = '';
+    }
+
+    function fmtTime(s) {
+      s = Math.round(s);
+      if (s < 60) return `${s}s`;
+      if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s`;
+      return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
+    }
+
+    function setRunning(running) {
+      document.getElementById('btn-start').disabled = running;
+      document.getElementById('btn-pause').disabled = !running;
+      document.getElementById('btn-stop').disabled = !running;
+    }
+
+    function log(level, msg) {
+      const now = nowText();
+      const body = document.getElementById('log-body');
+      const el = document.createElement('div');
+      el.className = 'log-entry';
+      const ts = document.createElement('span');
+      ts.className = 'log-ts';
+      ts.textContent = now;
+      const text = document.createElement('span');
+      text.className = `log-${level}`;
+      text.textContent = ` ${msg}`;
+      el.appendChild(ts);
+      el.appendChild(text);
+      body.appendChild(el);
+      body.scrollTop = body.scrollHeight;
+      logEntries.push({ ts: now, level, msg });
+      if (logEntries.length > 2000) logEntries.shift();
+    }
+
+    function setSimulationInputs(metrics) {
+      document.getElementById('sim-freq').value = metrics.freq.toFixed(2);
+      document.getElementById('sim-current').value = metrics.current.toFixed(2);
+      document.getElementById('sim-voltage').value = metrics.voltage.toFixed(1);
+      document.getElementById('sim-load').value = metrics.load.toFixed(1);
+      document.getElementById('sim-bus').value = metrics.bus.toFixed(1);
+      document.getElementById('sim-speed').value = metrics.speed.toFixed(0);
+      document.getElementById('sim-status').value = `0x${metrics.statusRaw.toString(16).toUpperCase().padStart(4, '0')}`;
+    }
+
+    function randomizeSimulationInputs() {
+      const load = 35 + Math.random() * 55;
+      const current = (load / 100) * 20 + (Math.random() - 0.5) * 0.8;
+      const voltage = 340 + (load / 100) * 80 + (Math.random() - 0.5) * 4;
+      const next = {
+        freq: 45 + Math.random() * 10,
+        current: Math.max(0, current),
+        voltage: Math.max(0, voltage),
+        load: Math.max(0, Math.min(100, load)),
+        bus: 500 + Math.random() * 80,
+        speed: 1100 + Math.random() * 700,
+        statusRaw: 0x0000,
+      };
+      setSimulationInputs(next);
+      simState = readSimulationInputs();
+    }
+
+    function setupSimulationVerification() {
+      const toggle = document.getElementById('sim-enabled');
+      const btnApply = document.getElementById('btn-sim-apply');
+      const btnRandom = document.getElementById('btn-sim-random');
+      const btnSimLive = document.getElementById('btn-sim-live-toggle');
+      const btnRamp = document.getElementById('btn-sim-ramp');
+
+      function syncSimButtons() {
+        btnSimLive.textContent = monitorTimer ? 'Stop Sim Monitor' : 'Start Sim Monitor';
+        btnRamp.textContent = rampTimer ? 'Stop Ramp Test' : 'Ramp Test 20% -> 100%';
+      }
+
+      toggle.addEventListener('change', async () => {
+        if (toggle.checked && isPortOpen()) {
+          toggle.checked = false;
+          log('warn', 'Disconnect RS-485 before enabling simulation mode.');
+          return;
+        }
+
+        simulationEnabled = toggle.checked;
+        if (simulationEnabled) {
+          simState = readSimulationInputs();
+          log('warn', 'Simulation mode enabled. RS-485 is bypassed for verification.');
+          refreshSourceState();
+          try {
+            applySimulationToDashboard({ autoJitter: false, source: 'SIM-MANUAL' });
+            log('ok', 'Simulation sample applied to dashboard.');
+          }
+          catch (err) { log('error', `Simulation apply error: ${err.message}`); }
+        } else {
+          if (rampTimer) {
+            clearInterval(rampTimer);
+            rampTimer = null;
+          }
+          stopMonitor(true);
+          log('info', 'Simulation mode disabled. Ready for RS-485 live data.');
+          refreshSourceState();
+        }
+        syncSimButtons();
+      });
+
+      btnApply.addEventListener('click', async () => {
+        simState = readSimulationInputs();
+        if (!simulationEnabled) {
+          log('info', 'Sample saved. Enable simulation mode to apply to dashboard.');
+          return;
+        }
+        try {
+          applySimulationToDashboard({ autoJitter: false, source: 'SIM-MANUAL' });
+          log('ok', 'Simulation sample applied to dashboard.');
+        }
+        catch (err) { log('error', `Simulation apply error: ${err.message}`); }
+      });
+
+      btnRandom.addEventListener('click', async () => {
+        randomizeSimulationInputs();
+        if (!simulationEnabled) {
+          log('info', 'Random sample generated. Enable simulation mode to view.');
+          return;
+        }
+        try {
+          applySimulationToDashboard({ autoJitter: false, source: 'SIM-MANUAL' });
+          log('ok', 'Random simulation sample applied.');
+        }
+        catch (err) { log('error', `Simulation random error: ${err.message}`); }
+      });
+
+      btnSimLive.addEventListener('click', () => {
+        if (!simulationEnabled) {
+          log('warn', 'Enable simulation mode first.');
+          return;
+        }
+        if (monitorTimer) {
+          stopMonitor(false);
+        } else {
+          startMonitor();
+        }
+        syncSimButtons();
+      });
+
+      btnRamp.addEventListener('click', async () => {
+        if (!simulationEnabled) {
+          log('warn', 'Enable simulation mode before running Ramp Test.');
+          return;
+        }
+
+        if (rampTimer) {
+          clearInterval(rampTimer);
+          rampTimer = null;
+          log('warn', 'Ramp test stopped.');
+          syncSimButtons();
+          return;
+        }
+
+        stopMonitor(true);
+        let load = 20;
+        simState.load = load;
+        simState = readSimulationInputs();
+        simState.load = load;
+        setSimulationInputs(simState);
+        applySimulationToDashboard({ autoJitter: false, source: 'RAMP', writeInputs: true });
+        log('info', 'Ramp test started: load 20% -> 100%.');
+
+        rampTimer = setInterval(() => {
+          load = Math.min(100, load + 5);
+          simState.load = load;
+          simState.current = Math.max(0, (load / 100) * 20 + (Math.random() - 0.5) * 0.5);
+          simState.voltage = Math.max(300, 340 + (load / 100) * 80 + (Math.random() - 0.5) * 3);
+          simState.bus = Math.max(420, 500 + load * 0.7 + (Math.random() - 0.5) * 3);
+          simState.speed = Math.max(500, 1000 + load * 7 + (Math.random() - 0.5) * 15);
+          applySimulationToDashboard({ autoJitter: false, source: 'RAMP', writeInputs: true });
+
+          if (load >= 100) {
+            clearInterval(rampTimer);
+            rampTimer = null;
+            log('ok', 'Ramp test completed at 100% load.');
+            syncSimButtons();
+          }
+        }, 1000);
+
+        syncSimButtons();
+      });
+
+      setSimulationInputs(simState);
+      // Sync internal state with browser-restored checkbox value on page load.
+      simulationEnabled = toggle.checked === true;
+      if (simulationEnabled) {
+        simState = readSimulationInputs();
+        refreshSourceState();
+        try {
+          applySimulationToDashboard({ autoJitter: false, source: 'SIM-MANUAL' });
+          log('ok', 'Simulation restored from previous session.');
+        } catch (err) {
+          log('error', `Simulation init error: ${err.message}`);
+        }
+      }
+      syncSimButtons();
+    }
+
+    document.getElementById('sel-profile').addEventListener('change', (e) => {
+      const p = PROFILES[e.target.value];
+      if (!p) return;
+      document.getElementById('sel-baud').value = p.baud;
+      document.getElementById('sel-frame').value = p.frame;
+      document.getElementById('inp-slave').value = p.slaveId;
+      updateDeviceHeader();
+      log('info', `Profile loaded: ${e.target.options[e.target.selectedIndex].text}`);
+    });
+
+    document.getElementById('sel-vendor').addEventListener('change', () => {
+      updateDeviceHeader();
+      log('info', `Vendor selected: ${getSelectedVendorLabel()}`);
+    });
+
+    document.getElementById('btn-scan').addEventListener('click', async () => {
+      if (simulationEnabled) {
+        log('warn', 'Disable simulation mode before running Auto Scan.');
+        return;
+      }
+      if (isPortOpen()) { log('warn', 'Already connected. Disconnect first.'); return; }
+      const btnScan = document.getElementById('btn-scan');
+      const prog = document.getElementById('scan-progress');
+      const bar = document.getElementById('scan-bar');
+      const scanLbl = document.getElementById('scan-label');
+      const scanDtl = document.getElementById('scan-detail');
+      btnScan.disabled = true;
+      document.getElementById('btn-connect').disabled = true;
+      prog.classList.add('active');
+      log('info', `Auto scan started, ${SCAN_TOTAL} combinations.`);
+
+      try {
+        await autoScan({
+          onProgress(tried, total, { baud, frame, slaveId }) {
+            const pct = (tried / total * 100).toFixed(0);
+            bar.style.width = pct + '%';
+            scanLbl.textContent = `Scanning ${tried}/${total} (${pct}%)`;
+            scanDtl.textContent = `${baud} baud | ${frame} | ID:${slaveId}`;
+          },
+          onFound({ baud, frame, slaveId }) {
+            prog.classList.remove('active');
+            document.getElementById('sel-baud').value = baud;
+            document.getElementById('sel-frame').value = frame;
+            document.getElementById('inp-slave').value = slaveId;
+            document.getElementById('sel-profile').value = '';
+            setConnected(true, baud, frame, slaveId);
+            loadVendors();
+            updateDeviceHeader();
+            log('ok', `Device found: ${baud} baud | ${frame} | Slave ID ${slaveId}`);
+            appendCommRow('RX', '03 Probe', `${baud}/${frame}/ID${slaveId}`, 'OK');
+          },
+          onNotFound() {
+            prog.classList.remove('active');
+            log('error', 'No device responded. Check wiring and power.');
+            appendCommRow('RX', '03 Probe', 'No response', 'ERR');
+          },
+        });
+      } catch (err) {
+        prog.classList.remove('active');
+        log('error', `Auto scan error: ${err.message}`);
+        appendCommRow('RX', '03 Probe', err.message, 'ERR');
+      } finally {
+        btnScan.disabled = false;
+        document.getElementById('btn-connect').disabled = false;
+      }
+    });
+
+    document.getElementById('btn-connect').addEventListener('click', async () => {
+      if (simulationEnabled) {
+        log('warn', 'Disable simulation mode before connecting RS-485.');
+        return;
+      }
+      if (serialBusy) return;
+      serialBusy = true;
+      const btnConnect = document.getElementById('btn-connect');
+      const btnScan = document.getElementById('btn-scan');
+      btnConnect.disabled = true;
+      btnScan.disabled = true;
+      try {
+        if (isPortOpen()) {
+          await closePort();
+          setConnected(false);
+          log('info', 'Serial port disconnected.');
+          appendCommRow('TX', 'Close Port', 'Manual disconnect', 'OK');
+          return;
+        }
+        const baud = parseInt(document.getElementById('sel-baud').value, 10);
+        const frame = document.getElementById('sel-frame').value;
+        const slaveId = parseInt(document.getElementById('inp-slave').value, 10);
+        if (!Number.isInteger(slaveId) || slaveId < 1 || slaveId > 247) throw new Error('Slave ID must be in range 1..247');
+        await openPort(baud, slaveId, frame);
+        setConnected(true, baud, frame, slaveId);
+        await loadVendors();
+        updateDeviceHeader();
+        log('ok', `Connected @ ${baud} | ${frame} | Slave ID ${slaveId}`);
+        appendCommRow('TX', 'Open Port', `${baud}/${frame}/ID${slaveId}`, 'OK');
+      } catch (err) {
+        await closePort();
+        setConnected(false);
+        const msg = err?.message || String(err);
+        log('error', `Connect failed: ${msg}`);
+        appendCommRow('TX', 'Open Port', msg, 'ERR');
+      } finally {
+        serialBusy = false;
+        btnConnect.disabled = false;
+        btnScan.disabled = isPortOpen();
+      }
+    });
+
+    document.getElementById('btn-fingerprint').addEventListener('click', () => {
+      log('warn', 'Auto detect is not enabled in this web build. Select vendor manually.');
+    });
+
+    document.getElementById('btn-start').addEventListener('click', async () => {
+      const vendorKey = document.getElementById('sel-vendor').value;
+      if (!vendorKey) { log('warn', 'Please select a vendor first.'); return; }
+
+      if (DEBUG) {
+        vendorConfig = window.DEBUG_CONFIGS[vendorKey];
+        if (!vendorConfig) { log('error', `No config found for ${vendorKey}.`); return; }
+        log('info', 'Local config loaded. Unlock process started.');
+        auditDebug('start', { vendor_key: vendorKey, details: `Session ${SESSION_ID} started` });
+      }
+
+      resetProgress();
+      document.getElementById('found-box').style.display = 'none';
+      setRunning(true);
+
+      engine = new BruteForceEngine({
+        config: vendorConfig,
+        onProgress: (cur, total, speed) => updateProgress(cur, total, speed),
+        onFound: (pw, attempts) => onFound(pw, attempts, vendorKey),
+        onNotFound: () => onNotFound(),
+        onStatus: (msg) => {
+          log('info', msg);
+          document.getElementById('lbl-current-code').textContent = msg.includes('trying:') ? msg.split('trying:')[1].trim() : '--';
+        },
+        onLockout: (n) => log('warn', `Anti-lockout pause after ${n} attempts`),
+        onVerbose: (code, hexRaw, unlocked) => {
+          if (document.getElementById('chk-verbose').checked) {
+            const pw = String(code).padStart(5, '0');
+            const status = unlocked ? 'MATCH' : 'NO';
+            log('info', `[VERBOSE] ${pw} -> verReg=${hexRaw} ${status}`);
+          }
+          if (code > 0 && code % 500 === 0) auditDebug('progress_500', { vendor_key: vendorKey, attempts: code });
+        },
+      });
+
+      engine.run().catch(err => { log('error', `Engine error: ${err.message}`); setRunning(false); });
+    });
+
+    document.getElementById('btn-read-params').addEventListener('click', async () => {
+      if (!isDataSourceReady()) { log('warn', 'Connect RS-485 or enable simulation first.'); return; }
+      document.getElementById('btn-read-params').disabled = true;
+      try { await readAndRenderParameters({ silent: false, source: simulationEnabled ? 'SIM-MANUAL' : 'RX' }); }
+      catch (err) {
+        log('error', `Read snapshot error: ${err.message}`);
+        appendCommRow('RX', '03 Read Holding', err.message, 'ERR');
+      } finally { document.getElementById('btn-read-params').disabled = false; }
+    });
+
+    document.getElementById('btn-monitor-start').addEventListener('click', startMonitor);
+    document.getElementById('btn-monitor-stop').addEventListener('click', () => stopMonitor(false));
+
+    document.getElementById('btn-pause').addEventListener('click', () => {
+      if (!engine) return;
+      const btn = document.getElementById('btn-pause');
+      if (btn.textContent === 'Pause') { engine.pause(); btn.textContent = 'Resume'; log('warn', 'Bruteforce paused.'); }
+      else { engine.resume(); btn.textContent = 'Pause'; log('info', 'Bruteforce resumed.'); }
+    });
+
+    document.getElementById('btn-stop').addEventListener('click', () => {
+      if (engine) { engine.stop(); engine = null; }
+      setRunning(false);
+      log('warn', 'Bruteforce stopped by user.');
+    });
+
+    async function onFound(pw, attempts, vendorKey) {
+      setRunning(false);
+      const display = String(pw).padStart(5, '0');
+      document.getElementById('lbl-found-pw').textContent = display;
+      document.getElementById('found-box').style.display = 'block';
+      document.getElementById('lbl-current-code').textContent = display;
+      log('found', `Password found: ${display} after ${attempts} attempts.`);
+      document.getElementById('vendor-badge').textContent = `Found: ${display}`;
+      document.getElementById('vendor-badge').className = 'badge badge-green';
+      auditDebug('found', { vendor_key: vendorKey, password: pw, attempts });
+    }
+
+    function onNotFound() {
+      setRunning(false);
+      log('error', 'Password not found in range 00000-99999.');
+      document.getElementById('lbl-current-code').textContent = 'NOT FOUND';
+      document.getElementById('lbl-current-code').style.color = 'var(--red)';
+      auditDebug('not_found', { vendor_key: document.getElementById('sel-vendor').value, attempts: 99999 });
+    }
+
+    document.getElementById('btn-clear-log').addEventListener('click', () => {
+      document.getElementById('log-body').innerHTML = '';
+      logEntries = [];
+    });
+
+    document.getElementById('btn-export-log').addEventListener('click', () => {
+      const csv = 'Timestamp,Level,Message\n' + logEntries.map(e => `"${escapeCsv(e.ts)}","${escapeCsv(e.level)}","${escapeCsv(e.msg)}"`).join('\n');
+      const a = document.createElement('a');
+      a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+      a.download = `dashboard_log_${Date.now()}.csv`;
+      a.click();
+    });
+
+    window.addEventListener('resize', drawTrendChart);
+    window.addEventListener('resize', syncCommPanelHeight);
+    setInterval(updateUptime, 1000);
+    drawTrendChart();
+    syncCommPanelHeight();
+    updateDeviceHeader();
+    setupSimulationVerification();
+
+    if (runtimeIssues.length) {
+      runtimeIssues.forEach((issue) => log('error', `Runtime module load failed: ${issue}`));
+      log('warn', 'If opening HTML directly, run via local web server (http://localhost) to allow module imports.');
+    }
+
+    if (DEBUG) log('warn', 'DEBUG MODE active. Authentication disabled.');
+    log('info', 'Dashboard ready. Connect USB-RS485 or enable Simulation Verification.');
+    setConnected(false);
+  </script>
+</body>
+</html>

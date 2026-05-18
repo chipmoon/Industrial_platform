@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — InverterUnlock Pro</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    body { position:relative; z-index:1; min-height:100vh; }
+    .header { display:flex; align-items:center; gap:16px; padding:14px 24px; border-bottom:1px solid var(--border); background:rgba(10,15,30,0.8); }
+    .header-logo { font-family:var(--mono); font-size:16px; font-weight:700; color:#F8FAFC; }
+    .header-logo span { color:var(--blue); }
+    .main { max-width:900px; margin:0 auto; padding:24px 16px; display:flex; flex-direction:column; gap:16px; }
+    .card { padding:22px; }
+    .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    .table { width:100%; border-collapse:collapse; font-size:13px; }
+    .table th { font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; padding:8px 12px; text-align:left; border-bottom:1px solid var(--border); }
+    .table td { padding:10px 12px; border-bottom:1px solid rgba(255,255,255,0.04); color:var(--text); }
+    .table td:last-child { text-align:right; }
+    .table tr:hover td { background:rgba(255,255,255,0.02); }
+    .inline-row { display:flex; gap:8px; }
+    .inline-row .input { flex:1; }
+    .stat-card { text-align:center; padding:20px; }
+    .stat-num  { font-family:var(--mono); font-size:36px; font-weight:700; color:var(--blue); }
+    .stat-lbl  { font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-top:4px; }
+    @media (max-width:600px) { .grid-2 { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <script>window.APP_CONFIG = { apiBase: 'https://YOUR-HF-USERNAME-inverter-unlock-api.hf.space' };</script>
+
+  <header class="header">
+    <div class="header-logo">Inverter<span>Unlock</span> <span style="color:var(--orange)">Admin</span></div>
+    <div style="margin-left:auto;display:flex;gap:10px;">
+      <a href="app.html" class="btn btn-ghost" style="padding:6px 14px;font-size:12px;">App</a>
+      <button class="btn btn-ghost" id="btn-logout" style="padding:6px 14px;font-size:12px;">Logout</button>
+    </div>
+  </header>
+
+  <div class="main">
+
+    <!-- Stats -->
+    <div class="grid-2">
+      <div class="card stat-card">
+        <div class="stat-num" id="stat-whitelist">—</div>
+        <div class="stat-lbl">Whitelisted Users</div>
+      </div>
+      <div class="card stat-card">
+        <div class="stat-num" id="stat-sessions">—</div>
+        <div class="stat-lbl">Active Sessions</div>
+      </div>
+    </div>
+
+    <!-- Whitelist management -->
+    <div class="card">
+      <div class="section-label">Whitelist Management</div>
+      <div class="inline-row" style="margin-bottom:16px;">
+        <input id="inp-add-email" class="input" type="email" placeholder="newuser@email.com">
+        <button class="btn btn-success" id="btn-add-email">Add User</button>
+      </div>
+      <table class="table" id="tbl-whitelist">
+        <thead><tr><th>Email</th><th>Action</th></tr></thead>
+        <tbody id="tbody-whitelist"></tbody>
+      </table>
+    </div>
+
+    <!-- Active sessions -->
+    <div class="card">
+      <div style="display:flex;align-items:center;margin-bottom:14px;">
+        <div class="section-label" style="margin:0;">Active Sessions</div>
+        <button class="btn btn-ghost" id="btn-refresh-sessions" style="margin-left:auto;padding:5px 12px;font-size:11px;">Refresh</button>
+      </div>
+      <table class="table">
+        <thead><tr><th>Email</th><th>Login Time</th><th>IP</th><th>Action</th></tr></thead>
+        <tbody id="tbody-sessions"></tbody>
+      </table>
+    </div>
+
+    <!-- Audit log -->
+    <div class="card">
+      <div class="section-label">Recent Audit Log</div>
+      <table class="table">
+        <thead><tr><th>Time</th><th>Email</th><th>Action</th><th>Details</th></tr></thead>
+        <tbody id="tbody-logs"></tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <script type="module">
+    import { requireAuth, isAdmin, logout, authGet, authPost } from './js/auth.js';
+
+    if (!requireAuth()) throw new Error('Not authenticated');
+    if (!isAdmin()) { window.location.href = 'app.html'; }
+
+    document.getElementById('btn-logout').addEventListener('click', () => logout());
+
+    // ── Load all data ─────────────────────────────────────────── //
+    async function loadAll() {
+      await Promise.all([loadWhitelist(), loadSessions(), loadLogs()]);
+    }
+
+    async function loadWhitelist() {
+      const data = await authGet('/admin/whitelist');
+      document.getElementById('stat-whitelist').textContent = data.emails.length;
+      const tbody = document.getElementById('tbody-whitelist');
+      tbody.innerHTML = data.emails.map(email => `
+        <tr>
+          <td style="font-family:var(--mono);font-size:12px;">${email}</td>
+          <td><button class="btn btn-danger" style="padding:4px 12px;font-size:11px;"
+              onclick="removeEmail('${email}')">Remove</button></td>
+        </tr>`).join('');
+    }
+
+    async function loadSessions() {
+      const data = await authGet('/admin/sessions');
+      document.getElementById('stat-sessions').textContent = data.count;
+      const tbody = document.getElementById('tbody-sessions');
+      tbody.innerHTML = data.sessions.map(s => `
+        <tr>
+          <td style="font-family:var(--mono);font-size:12px;">${s.email}</td>
+          <td style="font-size:12px;">${s.issued_at ? new Date(s.issued_at).toLocaleString() : '—'}</td>
+          <td style="font-family:var(--mono);font-size:11px;color:var(--text-muted);">${s.ip}</td>
+          <td><button class="btn btn-danger" style="padding:4px 12px;font-size:11px;"
+              onclick="kickSession('${s.email}')">Kick</button></td>
+        </tr>`).join('') || '<tr><td colspan="4" style="color:var(--text-muted);text-align:center;">No active sessions</td></tr>';
+    }
+
+    async function loadLogs() {
+      const data = await authGet('/audit/recent?n=30');
+      const tbody = document.getElementById('tbody-logs');
+      const colorMap = { PASSWORD_FOUND:'var(--green)', ERROR:'var(--red)', session_start:'var(--blue)' };
+      tbody.innerHTML = data.logs.map(l => {
+        const color = colorMap[l.action] || 'var(--text-muted)';
+        const ts    = l.ts ? new Date(l.ts).toLocaleString() : '—';
+        const detail = l.password != null ? `PW: ${String(l.password).padStart(5,'0')}` : (l.details || '');
+        return `<tr>
+          <td style="font-size:11px;color:var(--text-dim);">${ts}</td>
+          <td style="font-family:var(--mono);font-size:11px;">${l.email || ''}</td>
+          <td style="font-size:12px;color:${color};font-weight:600;">${l.action}</td>
+          <td style="font-size:11px;color:var(--text-muted);">${detail}</td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="4" style="color:var(--text-muted);text-align:center;">No logs yet</td></tr>';
+    }
+
+    // ── Actions (exposed to global scope for inline onclick) ──── //
+    window.removeEmail = async (email) => {
+      if (!confirm(`Remove ${email} from whitelist?`)) return;
+      await authPost('/admin/whitelist/remove', { email });
+      loadAll();
+    };
+
+    window.kickSession = async (email) => {
+      if (!confirm(`Force logout ${email}?`)) return;
+      await authPost('/admin/sessions/kick', { email });
+      loadAll();
+    };
+
+    document.getElementById('btn-add-email').addEventListener('click', async () => {
+      const email = document.getElementById('inp-add-email').value.trim();
+      if (!email) return;
+      await authPost('/admin/whitelist/add', { email });
+      document.getElementById('inp-add-email').value = '';
+      loadAll();
+    });
+
+    document.getElementById('btn-refresh-sessions').addEventListener('click', loadAll);
+
+    loadAll();
+  </script>
+</body>
+</html>

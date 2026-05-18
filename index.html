@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>InverterUnlock Pro — Login</title>
+  <meta name="description" content="Secure login for InverterUnlock Pro">
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="stylesheet" href="css/styles.css">
+
+  <!-- [DEBUG] Bypass login — redirect immediately to app.html -->
+  <script>
+    var DEBUG_MODE = true; // Set to false to re-enable login
+    if (DEBUG_MODE) { window.location.replace('app.html'); }
+  </script>
+  <style>
+    body { display:flex; align-items:center; justify-content:center; min-height:100vh; padding:16px; position:relative; z-index:1; }
+    .login-wrap { width:100%; max-width:420px; }
+    .logo { text-align:center; margin-bottom:32px; }
+    .logo-title { font-family:var(--mono); font-size:22px; font-weight:700; color:#F8FAFC; letter-spacing:1px; }
+    .logo-sub { font-size:11px; color:var(--text-muted); letter-spacing:3px; text-transform:uppercase; margin-top:4px; }
+    .logo-dot { color:var(--blue); }
+    .login-card { padding:36px; }
+    .step { display:none; }
+    .step.active { display:block; }
+    .step-title { font-size:18px; font-weight:600; color:#F8FAFC; margin-bottom:6px; }
+    .step-desc  { font-size:13px; color:var(--text-muted); margin-bottom:24px; line-height:1.6; }
+    .form-group { margin-bottom:16px; }
+    .form-label { display:block; font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:6px; }
+    .btn-full { width:100%; justify-content:center; padding:12px; font-size:14px; }
+    .back-link { text-align:center; margin-top:16px; }
+    .back-link a { color:var(--text-muted); font-size:12px; cursor:pointer; text-decoration:none; }
+    .back-link a:hover { color:var(--blue); }
+    .error-msg { background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.25); color:var(--red); border-radius:var(--radius-sm); padding:10px 14px; font-size:12px; margin-top:12px; display:none; }
+    .timer { font-family:var(--mono); color:var(--orange); font-size:12px; text-align:right; margin-top:6px; }
+    .notice { background:rgba(59,130,246,0.08); border:1px solid rgba(59,130,246,0.2); border-radius:var(--radius-sm); padding:10px 14px; font-size:12px; color:var(--text-muted); margin-bottom:20px; }
+    .chrome-note { text-align:center; font-size:11px; color:var(--text-dim); margin-top:24px; }
+  </style>
+</head>
+<body>
+  <div class="login-wrap">
+    <!-- Logo -->
+    <div class="logo">
+      <div class="logo-title">Inverter<span class="logo-dot">Unlock</span> Pro</div>
+      <div class="logo-sub">RS-485 · Multi-Vendor · Secure</div>
+    </div>
+
+    <!-- Card -->
+    <div class="card login-card">
+
+      <!-- Step 1: Enter email -->
+      <div class="step active" id="step-email">
+        <div class="step-title">Sign In</div>
+        <div class="step-desc">Enter your authorized email address to receive a one-time login code.</div>
+        <div class="notice">Access is restricted to authorized users only.</div>
+        <div class="form-group">
+          <label class="form-label" for="email-input">Email Address</label>
+          <input id="email-input" type="email" class="input" placeholder="your@email.com" autocomplete="email" autofocus>
+        </div>
+        <div id="email-error" class="error-msg"></div>
+        <button id="btn-request-otp" class="btn btn-primary btn-full">Send Login Code</button>
+      </div>
+
+      <!-- Step 2: Enter OTP -->
+      <div class="step" id="step-otp">
+        <div class="step-title">Enter Code</div>
+        <div class="step-desc">A 6-digit code was sent to <strong id="otp-email-display"></strong>. Valid for 5 minutes.</div>
+        <div class="form-group">
+          <label class="form-label" for="otp-input">One-Time Code</label>
+          <input id="otp-input" type="text" class="otp-input" placeholder="000000"
+                 maxlength="6" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code">
+          <div class="timer" id="otp-timer">5:00 remaining</div>
+        </div>
+        <div id="otp-error" class="error-msg"></div>
+        <button id="btn-verify-otp" class="btn btn-primary btn-full">Verify & Login</button>
+        <div class="back-link"><a id="btn-back">&#8592; Use a different email</a></div>
+      </div>
+
+    </div>
+
+    <div class="chrome-note">Requires Chrome or Edge for RS-485 access</div>
+  </div>
+
+  <!-- Config (set by deployment) -->
+  <script>
+    window.APP_CONFIG = { apiBase: 'https://chiphf-inverter-platform.hf.space' };
+  </script>
+  <script type="module">
+    import { requestOTP, verifyOTP, isLoggedIn } from './js/auth.js';
+
+    // Redirect if already logged in
+    if (isLoggedIn()) window.location.href = 'app.html';
+
+    // Pre-fill reason if redirected from app
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('reason')) showError('email-error', params.get('reason'));
+
+    // ── Step 1 ─────────────────────────────────────────────── //
+    let pendingEmail = '';
+    let otpTimer = null;
+
+    document.getElementById('btn-request-otp').addEventListener('click', async () => {
+      const email = document.getElementById('email-input').value.trim();
+      if (!email) return showError('email-error', 'Please enter your email address.');
+
+      const btn = document.getElementById('btn-request-otp');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Sending...';
+      hideError('email-error');
+
+      try {
+        await requestOTP(email);
+        pendingEmail = email;
+        document.getElementById('otp-email-display').textContent = email;
+        switchStep('step-email', 'step-otp');
+        document.getElementById('otp-input').focus();
+        startTimer();
+      } catch (err) {
+        showError('email-error', err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Send Login Code';
+      }
+    });
+
+    document.getElementById('email-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('btn-request-otp').click();
+    });
+
+    // ── Step 2 ─────────────────────────────────────────────── //
+    document.getElementById('btn-verify-otp').addEventListener('click', async () => {
+      const otp = document.getElementById('otp-input').value.trim();
+      if (otp.length !== 6) return showError('otp-error', 'Please enter the 6-digit code.');
+
+      const btn = document.getElementById('btn-verify-otp');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Verifying...';
+      hideError('otp-error');
+
+      try {
+        await verifyOTP(pendingEmail, otp);
+        stopTimer();
+        window.location.href = 'app.html';
+      } catch (err) {
+        showError('otp-error', err.message);
+        btn.disabled = false;
+        btn.innerHTML = 'Verify & Login';
+      }
+    });
+
+    document.getElementById('otp-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('btn-verify-otp').click();
+    });
+
+    document.getElementById('btn-back').addEventListener('click', () => {
+      stopTimer();
+      switchStep('step-otp', 'step-email');
+    });
+
+    // ── Helpers ────────────────────────────────────────────── //
+    function switchStep(from, to) {
+      document.getElementById(from).classList.remove('active');
+      document.getElementById(to).classList.add('active');
+    }
+
+    function showError(id, msg) {
+      const el = document.getElementById(id);
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+    function hideError(id) { document.getElementById(id).style.display = 'none'; }
+
+    function startTimer() {
+      let remaining = 5 * 60;
+      const el = document.getElementById('otp-timer');
+      otpTimer = setInterval(() => {
+        remaining--;
+        const m = Math.floor(remaining / 60);
+        const s = remaining % 60;
+        el.textContent = `${m}:${String(s).padStart(2,'0')} remaining`;
+        if (remaining <= 0) {
+          stopTimer();
+          el.textContent = 'Code expired';
+          el.style.color = 'var(--red)';
+          showError('otp-error', 'Code expired. Please go back and request a new one.');
+        }
+      }, 1000);
+    }
+    function stopTimer() { if (otpTimer) { clearInterval(otpTimer); otpTimer = null; } }
+  </script>
+</body>
+</html>
